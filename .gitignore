@@ -1,0 +1,17 @@
+# Build outputs
+/bin/
+/kafka-mcp
+*.test
+coverage.out
+
+# Local configs may reference credentials; keep only the examples in git.
+/kafka-mcp.yaml
+/kafka-mcp.yml
+/kafka-mcp.json
+*.local.yaml
+*.local.yml
+
+# Scan exports
+*.jsonl
+
+.DS_Store

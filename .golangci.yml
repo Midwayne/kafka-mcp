@@ -1,0 +1,125 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - dupl
+    - durationcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - forcetypeassert
+    - funlen
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - intrange
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - noctx
+    - nolintlint
+    - perfsprint
+    - prealloc
+    - predeclared
+    - revive
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+
+  settings:
+    funlen:
+      lines: 50
+      statements: 40
+      ignore-comments: false
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 15
+    nestif:
+      min-complexity: 4
+    dupl:
+      threshold: 120
+    goconst:
+      min-len: 3
+      min-occurrences: 4
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-tags: [diagnostic, style, performance]
+      disabled-checks:
+        - hugeParam      # config structs are passed by value deliberately (immutable snapshots)
+        - unnamedResult
+        - whyNoLint      # nolintlint already requires explanations
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: file-length-limit
+          arguments:
+            - max: 199
+              skipComments: false
+              skipBlankLines: false
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: early-return
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: context-as-argument
+        - name: error-strings
+        - name: error-return
+        - name: receiver-naming
+        - name: if-return
+    gosec:
+      excludes:
+        - G304 # file paths come from the operator's config, not from agents
+        - G703 # same: taint analysis of operator-configured paths
+    perfsprint:
+      strconcat: false
+
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      # Tests favour readable table-driven cases over size limits.
+      - path: _test\.go
+        linters: [funlen, dupl, gocognit, goconst, gosec, forcetypeassert, contextcheck]
+      - path: _test\.go
+        text: file-length-limit
+      - path: internal/testutil/
+        linters: [gosec]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/Midwayne/kafka-mcp
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
