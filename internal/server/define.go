@@ -7,6 +7,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+
+	"github.com/Midwayne/kafka-mcp/internal/app"
 )
 
 // effect classifies what a tool does, for MCP annotations and registration.
@@ -40,7 +42,7 @@ func define[T any](name, description string, kind effect, run func(context.Conte
 	handler := mcp.NewTypedToolHandler(func(ctx context.Context, _ mcp.CallToolRequest, args T) (*mcp.CallToolResult, error) {
 		result, err := run(ctx, args)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return mcp.NewToolResultError(app.Explain(err)), nil
 		}
 
 		return jsonResult(result), nil

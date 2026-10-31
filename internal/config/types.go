@@ -27,8 +27,16 @@ type Defaults struct {
 	DialTimeout    Duration   `yaml:"dial_timeout" json:"dial_timeout"`
 	RequestTimeout Duration   `yaml:"request_timeout" json:"request_timeout"`
 	Isolation      string     `yaml:"isolation" json:"isolation"`
+	Fetch          Fetch      `yaml:"fetch" json:"fetch"`
 	Scan           ScanLimits `yaml:"scan" json:"scan"`
 	Jobs           JobLimits  `yaml:"jobs" json:"jobs"`
+}
+
+// Fetch sizes consumer fetch responses. Kafka's defaults (1 MiB per partition,
+// 50 MiB per request) keep responses quick over slow links such as VPNs.
+type Fetch struct {
+	MaxBytes          ByteSize `yaml:"max_bytes" json:"max_bytes"`
+	MaxPartitionBytes ByteSize `yaml:"max_partition_bytes" json:"max_partition_bytes"`
 }
 
 // ScanLimits bounds the resources a single scan may use.
@@ -77,6 +85,7 @@ type Cluster struct {
 	Enabled          *bool           `yaml:"enabled" json:"enabled"`
 	DialTimeout      Duration        `yaml:"dial_timeout" json:"dial_timeout"`
 	RequestTimeout   Duration        `yaml:"request_timeout" json:"request_timeout"`
+	Fetch            Fetch           `yaml:"fetch" json:"fetch"`
 }
 
 // TLS configures transport security. PEM files, JKS, and PKCS#12 stores are supported.

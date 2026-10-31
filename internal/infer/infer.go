@@ -58,15 +58,17 @@ func (in *Inferrer) Add(root string, value any) {
 	in.walk(root, value, 0, map[string]bool{})
 }
 
-// AddMessage records a message's key, value, and header names.
-func (in *Inferrer) AddMessage(m *record.Message) {
+// AddEnvelope records a rendered message's key, value, and headers. Callers
+// pass the redacted envelope so examples never reveal masked fields.
+func (in *Inferrer) AddEnvelope(envelope map[string]any) {
 	visited := map[string]bool{}
 	in.messages++
 
-	in.walk("key", m.Key().Value, 0, visited)
-	in.walk("value", m.Value().Value, 0, visited)
+	in.walk("key", envelope["key"], 0, visited)
+	in.walk("value", envelope["value"], 0, visited)
 
-	for name, value := range m.Headers() {
+	headers, _ := envelope["headers"].(map[string]any)
+	for name, value := range headers {
 		in.walk("headers."+name, value, 0, visited)
 	}
 }

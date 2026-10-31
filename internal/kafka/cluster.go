@@ -2,8 +2,10 @@
 package kafka
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -11,13 +13,6 @@ import (
 
 	"github.com/Midwayne/kafka-mcp/internal/auth"
 	"github.com/Midwayne/kafka-mcp/internal/config"
-)
-
-// Consumer fetch sizing tuned for scanning: large per-partition fetches keep
-// throughput high while the total stays bounded per broker request.
-const (
-	fetchMaxBytes          = 64 << 20
-	fetchMaxPartitionBytes = 8 << 20
 )
 
 // Cluster holds the connection settings and shared clients for one cluster.
@@ -82,13 +77,34 @@ func (c *Cluster) Config() config.Cluster { return c.cfg }
 // Admin returns the shared admin client.
 func (c *Cluster) Admin() *kadm.Client { return c.admin }
 
-// Ping verifies connectivity and authentication by fetching broker metadata.
-func (c *Cluster) Ping(ctx context.Context) error {
+// Ping verifies connectivity and authentication to every advertised broker,
+// not just the bootstrap address: brokers often advertise different hosts
+// (or raw IPs) whose certificates and routes must also work.
+func (c *Cluster) Ping(ctx context.Context) (int, error) {
 	if _, err := c.admin.BrokerMetadata(ctx); err != nil {
-		return fmt.Errorf("cluster %q: %w", c.cfg.Name, err)
+		return 0, fmt.Errorf("cluster %q: %w", c.cfg.Name, err)
 	}
 
-	return nil
+	versions, err := c.admin.ApiVersions(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("cluster %q: %w", c.cfg.Name, err)
+	}
+
+	var firstErr error
+
+	failed := 0
+	for _, broker := range versions {
+		if broker.Err != nil {
+			failed++
+			firstErr = cmp.Or(firstErr, broker.Err)
+		}
+	}
+
+	if failed > 0 {
+		return len(versions), fmt.Errorf("cluster %q: %d of %d brokers failed: %w", c.cfg.Name, failed, len(versions), firstErr)
+	}
+
+	return len(versions), nil
 }
 
 // Consumer creates a short-lived, group-less client that reads the given
@@ -104,8 +120,8 @@ func (c *Cluster) Consumer(assignments map[string]map[int32]kgo.Offset) (*kgo.Cl
 		kgo.ConsumePartitions(assignments),
 		kgo.KeepControlRecords(),
 		kgo.FetchIsolationLevel(isolation),
-		kgo.FetchMaxBytes(fetchMaxBytes),
-		kgo.FetchMaxPartitionBytes(fetchMaxPartitionBytes),
+		kgo.FetchMaxBytes(toInt32(int64(c.cfg.Fetch.MaxBytes))),
+		kgo.FetchMaxPartitionBytes(toInt32(int64(c.cfg.Fetch.MaxPartitionBytes))),
 	)
 
 	if c.cfg.Rack != "" {
@@ -152,4 +168,17 @@ func (c *Cluster) Close() {
 		c.producer.Close()
 		c.producer = nil
 	}
+}
+
+// toInt32 clamps a size to Kafka's int32 protocol fields.
+func toInt32(v int64) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+
+	if v < 0 {
+		return 0
+	}
+
+	return int32(v)
 }

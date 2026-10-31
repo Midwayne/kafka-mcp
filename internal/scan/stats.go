@@ -13,7 +13,7 @@ const (
 	ReasonMaxBytes   = "max_bytes"   // the byte budget was used up
 	ReasonTimeout    = "timeout"     // the time budget ran out
 	ReasonCancelled  = "cancelled"   // the caller cancelled the scan
-	ReasonIdle       = "idle"        // no records arrived within idle_timeout before the ranges ended
+	ReasonIdle       = "idle"        // partitions that had returned data went quiet before reaching their end
 )
 
 const maxSamples = 5

@@ -1,0 +1,22 @@
+# Shared HTTP deployment: one server that a team or a hosted agent connects to.
+# A bearer token is required when the server listens beyond localhost.
+server:
+  serve_mode: http
+  host: 0.0.0.0
+  port: 8090
+  bearer_token: "${KAFKA_MCP_TOKEN}"
+  state_dir: /var/lib/kafka-mcp
+
+defaults:
+  scan:
+    rate_limit: 20MiB          # cap each scan's read rate to protect brokers
+    max_timeout: 10m
+  jobs:
+    max_concurrent: 8
+
+clusters:
+  - name: analytics
+    brokers: ["kafka-1:9092", "kafka-2:9092"]
+    topics:
+      exclude: ["_*", "*.pii"]
+    redact: [value.user.email, value.user.phone]

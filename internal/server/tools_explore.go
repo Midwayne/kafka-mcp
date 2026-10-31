@@ -13,12 +13,9 @@ func exploreTools(svc *app.Service) []toolDef {
 			reads, func(context.Context, none) (any, error) { return svc.ListClusters(), nil }),
 
 		define(app.ToolDescribeCluster,
-			"Connect to a cluster and return its ID, controller, brokers, and number of visible topics. Use to verify connectivity and auth.",
-			reads, func(ctx context.Context, args struct {
-				Cluster string `json:"cluster" jsonschema:"Cluster name."`
-			},
-			) (any, error) {
-				return svc.DescribeCluster(ctx, args.Cluster)
+			"Connect to every broker of a cluster and return its ID, controller, broker and rack counts, reachable brokers, and number of visible topics. Use to verify connectivity and auth.",
+			reads, func(ctx context.Context, args app.DescribeClusterSpec) (any, error) {
+				return svc.DescribeCluster(ctx, args)
 			}),
 
 		define(app.ToolListTopics,

@@ -1,0 +1,16 @@
+# Confluent Cloud: SASL/PLAIN with an API key, plus Schema Registry.
+clusters:
+  - name: confluent
+    brokers: ["pkc-xxxxx.us-east-1.aws.confluent.cloud:9092"]
+    security_protocol: SASL_SSL
+    tls: {}                        # public CA, so the system trust store is enough
+    sasl:
+      mechanism: PLAIN
+      username: ${CONFLUENT_API_KEY}
+      password: "${CONFLUENT_API_SECRET}"
+    schema_registry:
+      url: https://psrc-xxxxx.us-east-2.aws.confluent.cloud
+      username: ${SR_API_KEY}
+      password: "${SR_API_SECRET}"
+    formats:
+      value: schema_registry

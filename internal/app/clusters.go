@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
+	"slices"
 	"strconv"
 
 	"github.com/Midwayne/kafka-mcp/internal/config"
@@ -19,13 +21,22 @@ type ClusterInfo struct {
 	DefaultFormats map[string]string  `json:"default_formats"`
 }
 
+// DescribeClusterSpec selects a cluster.
+type DescribeClusterSpec struct {
+	Cluster        string `json:"cluster" jsonschema:"Cluster name."`
+	IncludeBrokers bool   `json:"include_brokers,omitempty" jsonschema:"List every broker address (large clusters have many)."`
+}
+
 // ClusterDetails is live metadata for one cluster.
 type ClusterDetails struct {
-	Name       string   `json:"name"`
-	ClusterID  string   `json:"cluster_id"`
-	Controller int32    `json:"controller"`
-	Brokers    []Broker `json:"brokers"`
-	Topics     int      `json:"visible_topics"`
+	Name        string   `json:"name"`
+	ClusterID   string   `json:"cluster_id"`
+	Controller  int32    `json:"controller"`
+	BrokerCount int      `json:"broker_count"`
+	Racks       []string `json:"racks,omitempty"`
+	Reachable   int      `json:"reachable_brokers"`
+	Topics      int      `json:"visible_topics"`
+	Brokers     []Broker `json:"brokers,omitempty"`
 }
 
 // Broker is one broker's address.
@@ -62,28 +73,42 @@ func (s *Service) ListClusters() []ClusterInfo {
 	return out
 }
 
-// DescribeCluster connects and returns broker metadata.
-func (s *Service) DescribeCluster(ctx context.Context, name string) (ClusterDetails, error) {
-	h, err := s.cluster(name, ToolDescribeCluster)
+// DescribeCluster connects to every broker and returns cluster metadata.
+func (s *Service) DescribeCluster(ctx context.Context, spec DescribeClusterSpec) (ClusterDetails, error) {
+	h, err := s.cluster(spec.Cluster, ToolDescribeCluster)
+	if err != nil {
+		return ClusterDetails{}, err
+	}
+
+	reachable, err := h.Ping(ctx)
 	if err != nil {
 		return ClusterDetails{}, err
 	}
 
 	metadata, err := h.Admin().Metadata(ctx)
 	if err != nil {
-		return ClusterDetails{}, fmt.Errorf("cluster %q: %w", name, err)
+		return ClusterDetails{}, fmt.Errorf("cluster %q: %w", spec.Cluster, err)
 	}
 
-	details := ClusterDetails{Name: name, ClusterID: metadata.Cluster, Controller: metadata.Controller}
+	details := ClusterDetails{
+		Name: spec.Cluster, ClusterID: metadata.Cluster, Controller: metadata.Controller,
+		BrokerCount: len(metadata.Brokers), Reachable: reachable,
+	}
 
 	for _, broker := range metadata.Brokers {
-		entry := Broker{ID: broker.NodeID, Address: broker.Host + ":" + strconv.Itoa(int(broker.Port))}
+		entry := Broker{ID: broker.NodeID, Address: net.JoinHostPort(broker.Host, strconv.Itoa(int(broker.Port)))}
 		if broker.Rack != nil {
 			entry.Rack = *broker.Rack
+			details.Racks = append(details.Racks, entry.Rack)
 		}
 
-		details.Brokers = append(details.Brokers, entry)
+		if spec.IncludeBrokers {
+			details.Brokers = append(details.Brokers, entry)
+		}
 	}
+
+	slices.Sort(details.Racks)
+	details.Racks = slices.Compact(details.Racks)
 
 	for _, topic := range metadata.Topics {
 		if !topic.IsInternal && h.Config().TopicAllowed(topic.Topic) {

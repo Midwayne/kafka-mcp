@@ -1,0 +1,59 @@
+# One cluster per SASL mechanism. Use the block that matches your cluster.
+clusters:
+  - name: scram
+    brokers: ["kafka.example.com:9094"]
+    security_protocol: SASL_SSL
+    tls:
+      ca_file: /etc/kafka/ca.pem
+    sasl:
+      mechanism: SCRAM-SHA-512           # or SCRAM-SHA-256
+      username: ${KAFKA_USER}
+      password: "${KAFKA_PASSWORD}"
+
+  - name: oauth-client-credentials
+    brokers: ["kafka.example.com:9095"]
+    security_protocol: SASL_SSL
+    tls: {}
+    sasl:
+      mechanism: OAUTHBEARER
+      oauth:
+        token_url: https://login.example.com/oauth2/token
+        client_id: ${OAUTH_CLIENT_ID}
+        client_secret: "${OAUTH_CLIENT_SECRET}"
+        scopes: [kafka]
+        endpoint_params: {audience: kafka}
+        extensions: {logicalCluster: lkc-123}   # optional SASL extensions
+
+  - name: oauth-token-file
+    brokers: ["kafka.example.com:9095"]
+    security_protocol: SASL_SSL
+    tls: {}
+    sasl:
+      mechanism: OAUTHBEARER
+      oauth:
+        token_file: /var/run/secrets/kafka/token  # re-read on every authentication
+
+  - name: msk-iam
+    brokers: ["b-1.cluster.xxxxx.kafka.us-east-1.amazonaws.com:9098"]
+    security_protocol: SASL_SSL
+    tls: {}
+    sasl:
+      mechanism: AWS_MSK_IAM
+      aws:
+        profile: ${AWS_PROFILE:-default}    # empty fields use the default AWS credential chain
+        region: us-east-1
+
+  - name: kerberos
+    brokers: ["kafka.corp.example.com:9093"]
+    security_protocol: SASL_SSL
+    tls:
+      truststore: ~/certs/truststore/truststore.jks
+      truststore_password: ${file:~/certs/truststore/pw.txt}
+    sasl:
+      mechanism: GSSAPI
+      kerberos:
+        service_name: kafka
+        realm: CORP.EXAMPLE.COM
+        username: svc-kafka-reader
+        keytab: /etc/security/keytabs/svc-kafka-reader.keytab
+        # Or omit username, realm, and keytab to use your kinit ticket cache (KRB5CCNAME).

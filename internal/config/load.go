@@ -1,11 +1,10 @@
 package config
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -14,9 +13,7 @@ import (
 // EnvVar names the environment variable that points at the config file.
 const EnvVar = "KAFKA_MCP_CONFIG"
 
-var placeholder = regexp.MustCompile(`\$\$|\$\{file:([^}]+)\}|\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}`)
-
-// Load reads, expands, parses, and normalizes a config file.
+// Load reads, parses, expands placeholders in, and normalizes a config file.
 func Load(path string) (*Config, error) {
 	resolved, err := ResolvePath(path)
 	if err != nil {
@@ -28,14 +25,9 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("read config %s: %w", resolved, err)
 	}
 
-	expanded, err := Expand(string(raw))
+	cfg, err := Decode(raw)
 	if err != nil {
 		return nil, fmt.Errorf("config %s: %w", resolved, err)
-	}
-
-	cfg, err := Parse(resolved, []byte(expanded))
-	if err != nil {
-		return nil, err
 	}
 
 	if err := cfg.Normalize(); err != nil {
@@ -69,53 +61,30 @@ func ResolvePath(path string) (string, error) {
 	return "", fmt.Errorf("no config found (pass -config, set %s, or create kafka-mcp.yaml)", EnvVar)
 }
 
-// Expand replaces ${VAR}, ${VAR:-default}, and ${file:/path}. "$$" yields a literal "$".
-// Bare $VAR is left untouched so passwords containing "$" survive.
-func Expand(s string) (string, error) {
-	var firstErr error
-
-	out := placeholder.ReplaceAllStringFunc(s, func(match string) string {
-		if match == "$$" {
-			return "$"
-		}
-
-		parts := placeholder.FindStringSubmatch(match)
-		if parts[1] != "" {
-			content, err := os.ReadFile(expandHome(strings.TrimSpace(parts[1])))
-			if err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("expand %s: %w", match, err)
-			}
-
-			return strings.TrimSpace(string(content))
-		}
-
-		if value, ok := os.LookupEnv(parts[2]); ok {
-			return value
-		}
-
-		return parts[4]
-	})
-
-	return out, firstErr
-}
-
-// Parse decodes YAML or JSON based on the file extension.
-func Parse(path string, raw []byte) (*Config, error) {
-	var cfg Config
-
-	if strings.EqualFold(filepath.Ext(path), ".json") {
-		if err := json.Unmarshal(raw, &cfg); err != nil {
-			return nil, fmt.Errorf("parse config JSON: %w", err)
-		}
-
-		return &cfg, nil
+// Decode parses YAML or JSON (a YAML subset), expands placeholders in scalar
+// values only, and rejects unknown fields. Expanding after parsing means
+// comments are ignored and secrets containing YAML syntax stay literal.
+func Decode(raw []byte) (*Config, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 
-	decoder := yaml.NewDecoder(strings.NewReader(string(raw)))
+	if err := expandNode(&root); err != nil {
+		return nil, err
+	}
+
+	expanded, err := yaml.Marshal(&root)
+	if err != nil {
+		return nil, fmt.Errorf("re-encode: %w", err)
+	}
+
+	decoder := yaml.NewDecoder(bytes.NewReader(expanded))
 	decoder.KnownFields(true)
 
+	var cfg Config
 	if err := decoder.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parse config YAML: %w", err)
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 
 	return &cfg, nil

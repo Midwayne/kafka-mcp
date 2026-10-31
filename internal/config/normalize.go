@@ -75,6 +75,7 @@ func (d *Defaults) normalize() error {
 	d.DialTimeout = orDuration(d.DialTimeout, DefaultDialTimeout)
 	d.RequestTimeout = orDuration(d.RequestTimeout, DefaultRequestTimeout)
 
+	d.Fetch = d.Fetch.withDefaults(Fetch{MaxBytes: 50 << 20, MaxPartitionBytes: 1 << 20})
 	d.Scan.normalize()
 	d.Jobs.normalize()
 
@@ -98,7 +99,7 @@ func (s *ScanLimits) normalize() {
 
 	s.DefaultTimeout = orDuration(s.DefaultTimeout, time.Minute)
 	s.MaxTimeout = orDuration(s.MaxTimeout, 15*time.Minute)
-	s.IdleTimeout = orDuration(s.IdleTimeout, 5*time.Second)
+	s.IdleTimeout = orDuration(s.IdleTimeout, 30*time.Second)
 }
 
 func (s *ScanLimits) validate() error {
@@ -115,6 +116,18 @@ func (s *ScanLimits) validate() error {
 	}
 
 	return nil
+}
+
+func (f Fetch) withDefaults(defaults Fetch) Fetch {
+	if f.MaxBytes <= 0 {
+		f.MaxBytes = defaults.MaxBytes
+	}
+
+	if f.MaxPartitionBytes <= 0 {
+		f.MaxPartitionBytes = defaults.MaxPartitionBytes
+	}
+
+	return f
 }
 
 func (j *JobLimits) normalize() {

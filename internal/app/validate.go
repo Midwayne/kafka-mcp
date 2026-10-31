@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 
 	"github.com/Midwayne/kafka-mcp/internal/filter"
@@ -149,7 +150,7 @@ func (e *sampleEvaluator) record(m *record.Message, matched bool, failure, group
 		if len(e.report.Examples) < maxValidateExamples {
 			e.report.Examples = append(e.report.Examples, record.Coordinates(m))
 		}
-		if group != "" && len(e.report.GroupExamples) < maxValidateExamples {
+		if group != "" && len(e.report.GroupExamples) < maxValidateExamples && !slices.Contains(e.report.GroupExamples, group) {
 			e.report.GroupExamples = append(e.report.GroupExamples, group)
 		}
 	}

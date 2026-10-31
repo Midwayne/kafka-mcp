@@ -31,7 +31,8 @@ func (s *Scanner) poll(scanCtx, parent context.Context, client *kgo.Client, work
 		}
 
 		if idle {
-			if s.req.Follow {
+			// Following, or still waiting for a first fetch: keep going until the timeout.
+			if s.req.Follow || !s.tracker.openFetched() {
 				continue
 			}
 

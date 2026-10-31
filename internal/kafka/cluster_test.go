@@ -55,8 +55,8 @@ func TestMutualTLSWithJKSAndSCRAM(t *testing.T) {
 	}
 	defer cluster.Close()
 
-	if err := cluster.Ping(pingCtx(t)); err != nil {
-		t.Fatalf("ping over mTLS+SCRAM: %v", err)
+	if brokers, err := cluster.Ping(pingCtx(t)); err != nil || brokers != 1 {
+		t.Fatalf("ping over mTLS+SCRAM: %d brokers, %v", brokers, err)
 	}
 
 	cfg.Clusters[0].SASL.Password = "wrong"
@@ -67,7 +67,7 @@ func TestMutualTLSWithJKSAndSCRAM(t *testing.T) {
 	}
 	defer badCluster.Close()
 
-	if err := badCluster.Ping(pingCtx(t)); err == nil {
+	if _, err := badCluster.Ping(pingCtx(t)); err == nil {
 		t.Fatal("expected authentication failure with the wrong password")
 	}
 }

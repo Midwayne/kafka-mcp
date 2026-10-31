@@ -13,13 +13,20 @@ import (
 func FakeCluster(tb testing.TB, opts ...kfake.Opt) []string {
 	tb.Helper()
 
+	return NewFakeCluster(tb, opts...).ListenAddrs()
+}
+
+// NewFakeCluster starts an in-memory Kafka cluster, for tests that inject behaviour.
+func NewFakeCluster(tb testing.TB, opts ...kfake.Opt) *kfake.Cluster {
+	tb.Helper()
+
 	cluster, err := kfake.NewCluster(append([]kfake.Opt{kfake.NumBrokers(1)}, opts...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}
 	tb.Cleanup(cluster.Close)
 
-	return cluster.ListenAddrs()
+	return cluster
 }
 
 // Produce synchronously writes records using a plaintext client.

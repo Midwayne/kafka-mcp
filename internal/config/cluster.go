@@ -84,6 +84,7 @@ func (c *Cluster) normalizeBasics(defaults Defaults) error {
 	c.Isolation = isolation
 
 	c.ClientID = orString(c.ClientID, defaults.ClientID)
+	c.Fetch = c.Fetch.withDefaults(defaults.Fetch)
 	c.DialTimeout = orDuration(c.DialTimeout, defaults.DialTimeout.Std())
 	c.RequestTimeout = orDuration(c.RequestTimeout, defaults.RequestTimeout.Std())
 

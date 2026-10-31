@@ -43,19 +43,23 @@ func (s *Service) InferSchema(ctx context.Context, spec InferSpec) (InferResult,
 	inferrer := infer.New(maxInferFields, maxInferDepth)
 	formats := map[string]map[string]int{"key": {}, "value": {}}
 
-	consume := func(m *record.Message) {
-		key, value := m.Key(), m.Value()
+	newSink := func(p *prepared, _ int) scan.Sink {
+		redacted := record.View{Redact: p.view.Redact, MaxItems: -1}
 
-		mu.Lock()
-		defer mu.Unlock()
+		return funcSink(func(m *record.Message) {
+			envelope := redacted.Render(m)
+			key, value := m.Key(), m.Value()
 
-		inferrer.AddMessage(m)
-		formats["key"][key.Format]++
-		formats["value"][value.Format]++
+			mu.Lock()
+			defer mu.Unlock()
+
+			inferrer.AddEnvelope(envelope)
+			formats["key"][key.Format]++
+			formats["value"][value.Format]++
+		})
 	}
 
-	_, err := s.readNewest(ctx, ToolInferSchema, spec.Target, spec.From, perPartition, spec.Output,
-		func(*prepared, int) scan.Sink { return funcSink(consume) })
+	_, err := s.readNewest(ctx, ToolInferSchema, spec.Target, spec.From, perPartition, spec.Output, newSink)
 	if err != nil {
 		return InferResult{}, err
 	}

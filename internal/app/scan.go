@@ -97,7 +97,11 @@ func (s *Service) Count(ctx context.Context, spec CountSpec) (ScanResult, error)
 	}
 
 	top := clampInt(spec.Top, defaultTopGroups, maxGroups)
-	samples := clampInt(spec.Samples, defaultSamples, p.limit)
+
+	samples := defaultSamples
+	if spec.Samples != nil {
+		samples = min(max(*spec.Samples, 0), p.limit)
+	}
 
 	return s.launch(ctx, p, ToolCountMessages, func(*jobs.Job) (collector, error) {
 		return countCollector{Counts: sink.NewCounts(key, maxGroups, samples, p.renderer()), top: top}, nil

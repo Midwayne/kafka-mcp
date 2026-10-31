@@ -14,12 +14,13 @@ type partitionKey struct {
 
 // partitionState tracks the read position of one range. dropped is the lowest
 // offset that was read but not delivered (e.g. after the sink filled up), so
-// resuming never skips a record.
+// resuming never skips a record. fetched is set once any fetch returned data.
 type partitionState struct {
 	end     int64
 	next    int64
 	dropped int64
 	done    bool
+	fetched bool
 }
 
 type tracker struct {
@@ -70,6 +71,7 @@ func (t *tracker) advance(key partitionKey, records []*kgo.Record, complete bool
 
 	if len(records) > 0 {
 		state.next = records[len(records)-1].Offset + 1
+		state.fetched = true
 	}
 
 	if complete {
@@ -94,6 +96,22 @@ func (t *tracker) allDone() bool {
 	defer t.mu.Unlock()
 
 	return t.open == 0
+}
+
+// openFetched reports whether every unfinished partition has returned data at
+// least once. Only then does a quiet period mean a partition is stuck at its
+// tail rather than slow to serve its first fetch (cold segments, tiered storage).
+func (t *tracker) openFetched() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for _, state := range t.states {
+		if !state.done && !state.fetched {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (t *tracker) counts() (total, done int) {

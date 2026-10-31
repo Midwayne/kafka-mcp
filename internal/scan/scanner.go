@@ -71,7 +71,7 @@ func New(req Request) *Scanner {
 	}
 
 	if req.Limits.IdleTimeout <= 0 {
-		req.Limits.IdleTimeout = 5 * time.Second
+		req.Limits.IdleTimeout = 30 * time.Second
 	}
 
 	return &Scanner{req: req, tracker: newTracker(req.Plan.Ranges), started: time.Now()}

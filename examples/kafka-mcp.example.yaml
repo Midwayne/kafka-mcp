@@ -1,0 +1,101 @@
+# Fully annotated configuration. Copy to kafka-mcp.yaml (or ~/.kafka-mcp/config.yaml) and edit.
+#
+# Placeholders in values are expanded when the server starts (comments are ignored):
+#   ${VAR}            environment variable (empty if unset)
+#   ${VAR:-default}   environment variable with a fallback
+#   ${file:/path}     contents of a file, trimmed (ideal for mounted secrets and pw.txt files)
+#   $$                a literal "$"
+# Expanded values are never parsed as YAML, so secrets may contain any characters.
+#
+# Every field except clusters[].name and clusters[].brokers is optional.
+
+server:
+  name: Kafka MCP
+  serve_mode: stdio            # stdio (desktop/CLI agents), http (streamable HTTP), or sse
+  host: 127.0.0.1              # http/sse only; non-loopback hosts require bearer_token
+  port: 8090
+  bearer_token: ${KAFKA_MCP_TOKEN:-}   # http/sse: require "Authorization: Bearer <token>"
+  state_dir: ~/.kafka-mcp      # saved scans and exports live here
+
+defaults:
+  access: read_only            # read_only or read_write (enables produce_message)
+  client_id: kafka-mcp
+  dial_timeout: 10s
+  request_timeout: 30s
+  isolation: read_uncommitted  # or read_committed to hide aborted transactions
+  fetch:
+    max_bytes: 50MiB           # per fetch request
+    max_partition_bytes: 1MiB  # per partition; keep small over VPNs and slow links
+  scan:
+    workers: 0                 # filter/decoder goroutines per scan; 0 = number of CPUs
+    default_limit: 20          # matches returned when the agent does not set limit
+    max_limit: 500
+    max_scanned: 5000000       # records one scan may read
+    max_bytes: 2GiB            # key+value bytes one scan may read
+    default_timeout: 1m
+    max_timeout: 15m
+    rate_limit: 0              # bytes/second per scan; 0 = unlimited (e.g. 20MiB to protect brokers)
+    max_value_chars: 1000      # strings longer than this are truncated in results
+    max_export_records: 1000000
+    idle_timeout: 30s          # how long a partition that has served data may go quiet before it is considered drained
+  jobs:
+    max_concurrent: 4          # background scans running at once
+    ttl: 1h                    # how long finished jobs stay available to get_job
+
+# Optional global tool filter (glob patterns over tool names).
+tools:
+  include: []
+  exclude: []                  # e.g. [produce_message]
+
+clusters:
+  - name: prod-east                       # what agents pass as "cluster"
+    brokers: ["b1.example.com:9093", "b2.example.com:9093"]
+    access: read_only
+    rack: us-east-1a                      # optional: prefer same-rack replicas (KIP-392 follower fetching)
+    security_protocol: SSL                # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL (inferred if omitted)
+
+    tls:
+      # Trust: any combination of PEM CA file/inline PEM and a truststore (JKS or PKCS#12, auto-detected).
+      truststore: ~/certs/truststore/truststore.jks
+      truststore_password: ${file:~/certs/truststore/pw.txt}
+      # Client certificate: a keystore (JKS or PKCS#12), or cert_file + key_file (PEM), or cert_pem + key_pem.
+      keystore: ~/certs/client/keystore.p12
+      keystore_password: ${file:~/certs/client/pw.txt}
+      # key_password: ...                 # defaults to keystore_password
+      # key_alias: client                 # JKS: pick a key entry (default: the first one)
+      # ca_file: /etc/kafka/ca.pem
+      # include_system_cas: false         # also trust the OS root store
+      # verify_hostname: false            # brokers advertise names/IPs missing from their certs; chain still verified
+      # server_name: kafka.internal       # SNI / expected certificate name override
+      # min_version: "1.2"
+
+    # sasl:                               # see docs/authentication.md for every mechanism
+    #   mechanism: SCRAM-SHA-512
+    #   username: ${KAFKA_USER}
+    #   password: "${KAFKA_PASSWORD}"
+
+    schema_registry:                      # optional: decode Avro, Protobuf, and JSON Schema payloads
+      url: https://schema-registry.example.com
+      username: ${SR_USER:-}
+      password: ${SR_PASSWORD:-}
+      # bearer_token: ...
+      # tls: {...}                        # defaults to the cluster's tls block
+
+    topics:                               # restrict what agents can see (globs)
+      include: ["orders.*", "shipments.*"]
+      exclude: ["*.pii", "*-dlq"]
+
+    formats:                              # payload decoders: auto, json, string, base64, hex, schema_registry, none
+      key: string
+      value: auto
+      topics:
+        - pattern: "orders.*"
+          value: schema_registry
+
+    redact:                               # masked in every result and export; "*" matches any key or index
+      - value.customer.email
+      - value.payment.card.*
+      - headers.authorization
+
+    tools:                                # per-cluster tool filter
+      exclude: []

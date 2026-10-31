@@ -3,11 +3,13 @@ package scan
 import (
 	"context"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kfake"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/Midwayne/kafka-mcp/internal/testutil"
 )
@@ -161,5 +163,30 @@ func TestScanCompletesWhenTransactionMarkersEndThePartition(t *testing.T) {
 
 	if stats.StopReason != ReasonCompleted || sink.count() != 3 || stats.ElapsedMs > 5000 {
 		t.Fatalf("stats = %+v, collected %d", stats, sink.count())
+	}
+}
+
+func TestScanWaitsForSlowFirstFetch(t *testing.T) {
+	fake := testutil.NewFakeCluster(t, kfake.SeedTopics(1, "slow"))
+	brokers := fake.ListenAddrs()
+
+	testutil.Produce(t, brokers, testutil.Record("slow", 0, "", `{}`, time.Now()), testutil.Record("slow", 0, "", `{}`, time.Now()))
+
+	// Delay the first fetch well beyond the idle timeout, like a cold tiered-storage read.
+	var delayed atomic.Bool
+	fake.ControlKey(int16(kmsg.Fetch), func(kmsg.Request) (kmsg.Response, error, bool) {
+		if delayed.CompareAndSwap(false, true) {
+			time.Sleep(1500 * time.Millisecond)
+		}
+
+		return nil, nil, false
+	})
+
+	f := fixture{cluster: newCluster(t, brokers)}
+	sink := newCollector(0)
+	stats := f.run(t, f.plan(t, Selection{Topics: []string{"slow"}}, Bounds{}), sink, Limits{IdleTimeout: 300 * time.Millisecond})
+
+	if stats.StopReason != ReasonCompleted || sink.count() != 2 {
+		t.Fatalf("slow first fetch should not end the scan as idle: %+v, collected %d", stats, sink.count())
 	}
 }

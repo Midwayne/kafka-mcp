@@ -169,3 +169,43 @@ func TestNetworkExposureRequiresToken(t *testing.T) {
 		}
 	}
 }
+
+func TestPlaceholdersExpandInValuesOnly(t *testing.T) {
+	t.Setenv("KMCP_TRICKY", `p@ss: #word "quoted" {braces}`)
+	t.Setenv("KMCP_PORT", "9999")
+
+	body := `# Comments may mention ${file:/does/not/exist} without effect.
+server:
+  serve_mode: http
+  port: ${KMCP_PORT}
+clusters:
+  - name: c
+    brokers: [b:9093]
+    sasl:
+      mechanism: PLAIN
+      username: u
+      password: ${KMCP_TRICKY}
+`
+
+	cfg, err := Load(writeConfig(t, "c.yaml", body))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Server.Port != 9999 || cfg.Clusters[0].SASL.Password != `p@ss: #word "quoted" {braces}` {
+		t.Fatalf("port = %d, password = %q", cfg.Server.Port, cfg.Clusters[0].SASL.Password)
+	}
+}
+
+func TestJSONConfig(t *testing.T) {
+	t.Setenv("KMCP_BROKER", "b:9092")
+
+	cfg, err := Load(writeConfig(t, "c.json", `{"clusters":[{"name":"c","brokers":["${KMCP_BROKER}"],"access":"rw"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Clusters[0].Brokers[0] != "b:9092" || !cfg.Clusters[0].CanWrite() {
+		t.Fatalf("unexpected cluster: %+v", cfg.Clusters[0])
+	}
+}

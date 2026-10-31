@@ -61,5 +61,5 @@ type CountSpec struct {
 	ScanSpec
 	GroupBy string `json:"group_by,omitempty" jsonschema:"CEL expression to group by, e.g. value.status, headers['type'], [value.store, value.status], timestamp.getHours(). Omit to count all matches."`
 	Top     int    `json:"top,omitempty" jsonschema:"Return the top N groups (default 50)."`
-	Samples int    `json:"samples,omitempty" jsonschema:"Also return this many example matches (default 3)."`
+	Samples *int   `json:"samples,omitempty" jsonschema:"Also return this many example matches (default 3; 0 for none)."`
 }

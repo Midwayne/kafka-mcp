@@ -78,7 +78,16 @@ func TestSampleInferValidate(t *testing.T) {
 	fields := items(object(inferred["schema"])["fields"])
 	paths := make([]string, 0, len(fields))
 	for _, field := range fields {
-		paths = append(paths, object(field)["path"].(string))
+		path := object(field)["path"].(string)
+		paths = append(paths, path)
+
+		if path == "value.customer.email" {
+			for _, example := range items(object(field)["examples"]) {
+				if example != "[REDACTED]" {
+					t.Fatalf("infer_schema leaked a redacted value: %v", example)
+				}
+			}
+		}
 	}
 
 	if !slices.Contains(paths, "value.status") || !slices.Contains(paths, "headers.type") {

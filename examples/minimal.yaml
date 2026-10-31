@@ -1,0 +1,4 @@
+# Smallest useful config: one local cluster without authentication.
+clusters:
+  - name: local
+    brokers: ["localhost:9092"]
