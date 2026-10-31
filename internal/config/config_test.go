@@ -151,3 +151,21 @@ func TestRejectsUnknownFieldsAndDuplicates(t *testing.T) {
 		t.Fatalf("expected duplicate error, got %v", err)
 	}
 }
+
+func TestNetworkExposureRequiresToken(t *testing.T) {
+	cases := map[string]bool{
+		"server: {serve_mode: http}":                                   true,
+		"server: {serve_mode: http, host: localhost}":                  true,
+		"server: {serve_mode: sse, host: '::1'}":                       true,
+		"server: {serve_mode: http, host: 0.0.0.0}":                    false,
+		"server: {serve_mode: http, host: 0.0.0.0, bearer_token: abc}": true,
+	}
+
+	for server, ok := range cases {
+		body := server + "\nclusters:\n  - {name: c, brokers: [b:9092]}\n"
+
+		if _, err := Load(writeConfig(t, "c.yaml", body)); (err == nil) != ok {
+			t.Fatalf("%s: err = %v, want ok=%v", server, err, ok)
+		}
+	}
+}

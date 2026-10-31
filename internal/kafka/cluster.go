@@ -120,7 +120,8 @@ func (c *Cluster) Consumer(assignments map[string]map[int32]kgo.Offset) (*kgo.Cl
 	return client, nil
 }
 
-// Producer returns a shared producer, creating it on first use.
+// Producer returns a shared producer, creating it on first use. Records must
+// carry their target partition; callers choose it explicitly.
 func (c *Cluster) Producer() (*kgo.Client, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -129,7 +130,9 @@ func (c *Cluster) Producer() (*kgo.Client, error) {
 		return c.producer, nil
 	}
 
-	client, err := kgo.NewClient(c.opts...)
+	opts := append(append([]kgo.Opt{}, c.opts...), kgo.RecordPartitioner(kgo.ManualPartitioner()))
+
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("cluster %q producer: %w", c.cfg.Name, err)
 	}

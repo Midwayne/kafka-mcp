@@ -4,14 +4,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/Midwayne/kafka-mcp/internal/app"
 	"github.com/Midwayne/kafka-mcp/internal/config"
+	"github.com/Midwayne/kafka-mcp/internal/server"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".
@@ -25,7 +26,7 @@ func main() {
 }
 
 func run() error {
-	configPath := flag.String("config", "", "path to the YAML or JSON config (defaults to $"+config.EnvVar+" or kafka-mcp.yaml)")
+	configPath := flag.String("config", "", "path to the YAML or JSON config (defaults to $"+config.EnvVar+", ./kafka-mcp.yaml, or ~/.kafka-mcp/config.yaml)")
 	checkOnly := flag.Bool("check", false, "connect to every cluster, report the result, and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -47,5 +48,23 @@ func run() error {
 		return check(ctx, cfg, os.Stdout)
 	}
 
-	return errors.New("serving is not implemented yet")
+	return serve(ctx, cfg)
+}
+
+func serve(ctx context.Context, cfg *config.Config) error {
+	svc, err := app.New(cfg)
+	if err != nil {
+		return err
+	}
+	defer svc.Close()
+
+	serverVersion := cfg.Server.Version
+	if version != "dev" {
+		serverVersion = version
+	}
+
+	// Logs go to stderr: in stdio mode stdout carries the MCP protocol.
+	fmt.Fprintf(os.Stderr, "kafka-mcp %s: %d cluster(s), serving over %s\n", serverVersion, len(cfg.Clusters), cfg.Server.ServeMode)
+
+	return server.Serve(ctx, server.New(svc, cfg.Server.Name, serverVersion), cfg.Server)
 }

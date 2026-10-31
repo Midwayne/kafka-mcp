@@ -58,25 +58,6 @@ func (c *Config) Normalize() error {
 	return nil
 }
 
-func (s *Server) normalize() error {
-	s.Name = orString(s.Name, DefaultServerName)
-	s.Version = orString(s.Version, DefaultServerVersion)
-	s.Host = orString(s.Host, DefaultHost)
-	s.StateDir = ExpandHome(orString(s.StateDir, DefaultStateDir))
-
-	if s.Port == 0 {
-		s.Port = DefaultPort
-	}
-
-	s.ServeMode = strings.ToLower(orString(s.ServeMode, DefaultServeMode))
-	switch s.ServeMode {
-	case "stdio", "http", "sse":
-		return nil
-	default:
-		return fmt.Errorf("server.serve_mode %q must be stdio, http, or sse", s.ServeMode)
-	}
-}
-
 func (d *Defaults) normalize() error {
 	access, err := ParseAccess(orString(d.Access, AccessReadOnly))
 	if err != nil {
