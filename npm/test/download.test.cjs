@@ -7,7 +7,7 @@ const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const { dirname, join } = require('node:path');
 const { test } = require('node:test');
-const { assetName, ensureBinary } = require('../lib/download.cjs');
+const { assetName, ensureBinary, publishVerified } = require('../lib/download.cjs');
 
 const version = '1.0.0';
 const asset = assetName(version, 'linux', 'x64');
@@ -74,4 +74,26 @@ test('concurrent installs share a complete verified binary', async (t) => {
   assert.ok(paths.every((path) => path === paths[0]));
   assert.deepEqual(await readFile(paths[0]), payload);
   assert.deepEqual((await readdir(dirname(paths[0]))).sort(), [asset, `${asset}.sha256`]);
+});
+
+test('Windows replacement denial reuses only a verified winner', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'kafka-mcp-publish-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const destination = join(directory, 'binary');
+  await writeFile(destination, payload);
+  const denied = async () => { throw Object.assign(new Error('file in use'), { code: 'EPERM' }); };
+  await publishVerified('unused', destination, digest, denied);
+  assert.deepEqual(await readFile(destination), payload);
+  await writeFile(destination, 'wrong winner');
+  await assert.rejects(publishVerified('unused', destination, digest, denied), /file in use/);
+});
+
+test('transient replacement denial retries instead of accepting a missing file', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'kafka-mcp-retry-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  let attempts = 0;
+  await publishVerified('unused', join(directory, 'absent'), digest, async () => {
+    if (++attempts === 1) throw Object.assign(new Error('busy'), { code: 'EACCES' });
+  });
+  assert.equal(attempts, 2);
 });

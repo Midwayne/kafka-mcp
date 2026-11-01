@@ -7,6 +7,7 @@ const { homedir } = require('node:os');
 const { join } = require('node:path');
 const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { setTimeout: delay } = require('node:timers/promises');
 
 const RELEASES = 'https://github.com/Midwayne/kafka-mcp/releases/download';
 
@@ -71,6 +72,20 @@ async function download(url, destination, expected) {
   if (hash.digest('hex') !== expected) throw new Error('Downloaded binary failed SHA-256 verification');
 }
 
+async function publishVerified(temporary, destination, expected, replace = rename) {
+  for (let attempt = 0; ; attempt++) {
+    try { await replace(temporary, destination); return; }
+    catch (error) {
+      if (!['EPERM', 'EACCES', 'EEXIST'].includes(error.code)) throw error;
+      // Windows can deny replacement while another installer reads the winner.
+      // Reuse it only after verifying that it is the exact expected file.
+      if (await verified(destination, expected)) return;
+      if (attempt >= 4) throw error;
+      await delay(25 * (attempt + 1));
+    }
+  }
+}
+
 async function ensureBinary({ version, platform = process.platform, arch = process.arch,
   cacheRoot = process.env.KAFKA_MCP_CACHE_DIR || join(homedir(), '.cache', 'kafka-mcp'),
   baseURL = `${RELEASES}/v${version}` }) {
@@ -89,9 +104,10 @@ async function ensureBinary({ version, platform = process.platform, arch = proce
   const temporaryDigest = `${temporary}.sha256`;
   try {
     await download(`${baseURL}/${asset}`, temporary, expected);
-    await rename(temporary, binary);
+    await publishVerified(temporary, binary, expected);
     await writeFile(temporaryDigest, expected, { flag: 'wx', mode: 0o600 });
-    await rename(temporaryDigest, digestFile);
+    const metadataHash = createHash('sha256').update(expected).digest('hex');
+    await publishVerified(temporaryDigest, digestFile, metadataHash);
   } finally {
     await Promise.all([temporary, temporaryDigest].map((file) =>
       unlink(file).catch((error) => { if (error.code !== 'ENOENT') throw error; })));
@@ -99,4 +115,4 @@ async function ensureBinary({ version, platform = process.platform, arch = proce
   return binary;
 }
 
-module.exports = { assetName, ensureBinary };
+module.exports = { assetName, ensureBinary, publishVerified };

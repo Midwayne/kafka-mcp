@@ -41,7 +41,7 @@ Install links pin the release version. Upgrades are deliberate: install the new 
 4. Run `make check`, `npm test`, and `python3 scripts/install_links.py --check`.
 5. For a packaging preview, run `make release VERSION=1.0.0`. This requires Go 1.26.1, Node.js 20+, npm, and Python 3.11+. It cross-compiles without CGO, validates and packs desktop manifests using the pinned MCPB CLI, packages the launcher, and writes checksums. `dist/` must be empty to prevent mixing versions.
 6. Run `python3 scripts/smoke.py --native-dist dist --version 1.0.0` on the native build. It checks the executable version, MCP initialization, tool discovery, and cluster discovery without needing a Kafka broker.
-7. Commit, push `main`, and wait for CI to pass. Create and push the annotated tag:
+7. Commit, push `main`, and wait for CI to pass. Run a packaging preview from GitHub Actions using the **Release** workflow's **Run workflow** button and enter `1.0.0`, or run `gh workflow run release.yml -f version=1.0.0`. Manual runs build and smoke-test every platform but never publish. After the preview succeeds, create and push the annotated tag:
 
    ```sh
    git tag -a v1.0.0 -m "Release v1.0.0"
@@ -51,7 +51,7 @@ Install links pin the release version. Upgrades are deliberate: install the new 
 8. Watch the **Release** workflow. It requires the tagged commit to belong to `main`, reruns checks, and builds all assets. Native smoke tests run on Linux, macOS, and Windows. Only after all checks pass does the publication job verify checksums, upload a draft, and publish it. Prereleases do not replace the latest stable release.
 9. Download the published launcher package and run `npx --yes --package=<package URL> kafka-mcp -version`; verify the downloaded binary reports the release version. Test at least one MCP handshake through the launcher and check that the public release contains every expected asset.
 
-If a workflow fails before publication, fix the cause and rerun it when appropriate. A rerun can replace assets only on an existing draft; it refuses to overwrite an already-published release. If the fix changes released source, create a new version rather than moving an existing tag.
+If a workflow fails before publication, fix the cause and rerun it when appropriate. Validate fixes using a manual preview before creating the final tag. A rerun can replace assets only on an existing draft; it refuses to overwrite an already-published release. If the fix changes released source, create a new version rather than moving a published tag.
 
 ## Checks and build settings
 

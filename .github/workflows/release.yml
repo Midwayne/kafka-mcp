@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Preview version matching package.json (does not publish)'
+        required: true
+        type: string
+
+env:
+  RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
 
 permissions:
   contents: read
@@ -30,7 +39,7 @@ jobs:
       - run: npm test
       - run: python3 scripts/install_links.py --check
       - name: Build binaries, desktop bundles, and launcher package
-        run: python3 scripts/release.py "$GITHUB_REF_NAME" --notes release-notes.md
+        run: python3 scripts/release.py "$RELEASE_VERSION" --notes release-notes.md
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: release-assets
@@ -58,10 +67,11 @@ jobs:
       - run: npm test
       - name: Verify native executable and MCP handshake
         shell: bash
-        run: python3 scripts/smoke.py --native-dist dist --version "${GITHUB_REF_NAME#v}"
+        run: python3 scripts/smoke.py --native-dist dist --version "${RELEASE_VERSION#v}"
 
   publish:
     needs: [build, smoke]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
