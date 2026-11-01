@@ -22,6 +22,26 @@ A scan reads records from brokers, then filters them in a worker pool. Measured 
 
 That is roughly 0.5 to 5 million messages per second per core, so **the network is almost always the limit**. For example, over a corporate VPN to a production cluster we measured ~0.75 MB/s per broker connection with no broker throttling, which works out to about 1,000–2,500 records per second for ~600-byte messages. On a host in the same network as the brokers, expect orders of magnitude more.
 
+Scan bookkeeping publishes record and byte counters once per fetched partition batch. Once inline samples are full, count scans and exports skip the sample-buffer lock. These reduce CPU overhead; they do not increase the available network bandwidth.
+
+To measure budget accounting, record evaluation with counting, and the count sink separately, run:
+
+```sh
+go test -run '^$' -bench 'Benchmark(Take|EvaluateCount|CountsOffer)' -benchmem -count=5 -cpu=1,8 ./internal/scan ./internal/sink
+```
+
+`BenchmarkTake` processes 10,000 records per operation. The other benchmarks report per-record costs with sampling disabled or already full. These isolate CPU costs and exclude Kafka fetching, so they are not end-to-end throughput measurements.
+
+Measured on Apple M4, Go 1.26.1, against commit `2d87846` (single-worker medians of five 500 ms runs):
+
+| CPU component | Before | After | Time reduction |
+|---|---|---|---|
+| Budget accounting, 10,000 records, both limits enabled | 27.31 µs | 14.10 µs | 48% |
+| Count sink, samples disabled | 20.99 ns/record | 18.84 ns/record | 10% |
+| Count sink, three samples already collected | 23.99 ns/record | 20.69 ns/record | 14% |
+
+The record evaluation and counting path improved by about 4–6% with one worker. Parallel measurements were more variable; six interleaved before/after runs with eight workers and full sampling buffers had medians of 190.45 and 176.10 ns/record, respectively (about 8% lower). These gains do not imply the same speedup for scans limited by network or decoding costs.
+
 ### Read less
 
 These matter far more than CPU tuning:

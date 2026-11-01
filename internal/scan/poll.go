@@ -125,25 +125,35 @@ func (s *Scanner) dispatch(client *kgo.Client, p kgo.FetchTopicPartition, work c
 // take applies the record and byte budgets, trimming the batch at the limit.
 func (s *Scanner) take(records []*kgo.Record) ([]*kgo.Record, string) {
 	limits := s.req.Limits
+	scanned, size := s.counters.scanned.Load(), s.counters.bytes.Load()
+	var added, addedBytes int64
+	end, reason := len(records), ""
 
 	for i, r := range records {
 		if r.Attrs.IsControl() {
 			continue
 		}
 
-		if limits.MaxScanned > 0 && s.counters.scanned.Load() >= limits.MaxScanned {
-			return records[:i], ReasonMaxScanned
+		if limits.MaxScanned > 0 && scanned+added >= limits.MaxScanned {
+			end, reason = i, ReasonMaxScanned
+			break
 		}
 
-		if limits.MaxBytes > 0 && s.counters.bytes.Load() >= limits.MaxBytes {
-			return records[:i], ReasonMaxBytes
+		if limits.MaxBytes > 0 && size+addedBytes >= limits.MaxBytes {
+			end, reason = i, ReasonMaxBytes
+			break
 		}
 
-		s.counters.scanned.Add(1)
-		s.counters.bytes.Add(int64(len(r.Key) + len(r.Value)))
+		added++
+		addedBytes += int64(len(r.Key) + len(r.Value))
 	}
 
-	return records, ""
+	// Only the poll loop writes these counters; publish once per batch so
+	// progress remains safe to read without per-record atomic updates.
+	s.counters.scanned.Add(added)
+	s.counters.bytes.Add(addedBytes)
+
+	return records[:end], reason
 }
 
 // throttle sleeps until the average read rate is within the byte-rate limit.

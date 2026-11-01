@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Midwayne/kafka-mcp/internal/record"
 )
@@ -27,11 +28,15 @@ type Matches struct {
 
 	mu    sync.Mutex
 	items []item
+	full  atomic.Bool // Once full, sampling stops without contending on mu.
 }
 
 // NewMatches creates a sink. export may be nil.
 func NewMatches(limit int, renderer record.Renderer, export *Export) *Matches {
-	return &Matches{limit: limit, renderer: renderer, export: export}
+	matches := &Matches{limit: limit, renderer: renderer, export: export}
+	matches.full.Store(limit <= 0)
+
+	return matches
 }
 
 // Offer implements scan.Sink. With an export, the export decides acceptance
@@ -48,7 +53,7 @@ func (m *Matches) Offer(message *record.Message) (accepted, more bool) {
 
 // store keeps the message if there is room and reports whether room remains.
 func (m *Matches) store(message *record.Message) (stored, room bool) {
-	if !m.hasRoom() {
+	if m.full.Load() {
 		return false, false
 	}
 
@@ -65,15 +70,12 @@ func (m *Matches) store(message *record.Message) (stored, room bool) {
 	m.items = append(m.items, item{
 		ts: r.Timestamp.UnixMilli(), topic: r.Topic, partition: r.Partition, offset: r.Offset, rendered: rendered,
 	})
+	room = len(m.items) < m.limit
+	if !room {
+		m.full.Store(true)
+	}
 
-	return true, len(m.items) < m.limit
-}
-
-func (m *Matches) hasRoom() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return len(m.items) < m.limit
+	return true, room
 }
 
 // Items returns stored matches ordered by timestamp, then topic, partition, and offset.
