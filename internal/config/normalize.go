@@ -16,7 +16,7 @@ const (
 // Defaults used when the config omits a value.
 const (
 	DefaultServerName     = "Kafka MCP"
-	DefaultServerVersion  = "0.1.0"
+	DefaultServerVersion  = "1.0.0"
 	DefaultServeMode      = "stdio"
 	DefaultHost           = "127.0.0.1"
 	DefaultPort           = 8090

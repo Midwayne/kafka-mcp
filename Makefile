@@ -22,6 +22,10 @@ build: ## Build ./bin/kafka-mcp
 test: ## Run tests with the race detector
 	$(GO) test -race -count=1 ./...
 
+.PHONY: release
+release: ## Build release assets in dist/ (VERSION=1.0.0; requires Node.js and Python 3.11+)
+	python3 scripts/release.py "$(VERSION)"
+
 .PHONY: cover
 cover: ## Run tests and print per-package coverage
 	$(GO) test -count=1 -coverprofile=$(BIN)/coverage.out ./...

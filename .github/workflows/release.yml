@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.1'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Require a commit on main
+        run: git merge-base --is-ancestor HEAD origin/main
+      - run: make check
+      - run: npm test
+      - run: python3 scripts/install_links.py --check
+      - name: Build binaries, desktop bundles, and launcher package
+        run: python3 scripts/release.py "$GITHUB_REF_NAME" --notes release-notes.md
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-assets
+          overwrite: true
+          retention-days: 7
+          path: |
+            dist/
+            release-notes.md
+
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-assets
+      - run: npm test
+      - name: Verify native executable and MCP handshake
+        shell: bash
+        run: python3 scripts/smoke.py --native-dist dist --version "${GITHUB_REF_NAME#v}"
+
+  publish:
+    needs: [build, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-assets
+      - name: Verify every release asset
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+      - name: Publish verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" --json isDraft --jq .isDraft > existing-release.txt 2>/dev/null; then
+            if [ "$(cat existing-release.txt)" != true ]; then
+              echo "Release $tag is already published; refusing to overwrite it."
+              exit 1
+            fi
+            gh release upload "$tag" dist/* --clobber
+            gh release edit "$tag" --notes-file release-notes.md
+          else
+            gh release create "$tag" dist/* --verify-tag --draft --title "kafka-mcp $tag" --notes-file release-notes.md
+          fi
+          if [[ "$tag" == *-* ]]; then
+            gh release edit "$tag" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$tag" --draft=false --latest=true
+          fi

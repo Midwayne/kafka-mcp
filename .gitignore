@@ -1,5 +1,8 @@
 # Build outputs
 /bin/
+/dist/
+/node_modules/
+__pycache__/
 /kafka-mcp
 *.test
 coverage.out

@@ -26,15 +26,7 @@ Read-only by default. It never joins consumer groups or commits offsets, so it c
 
 ## Quick start
 
-**1. Build** (Go 1.26+):
-
-```sh
-git clone https://github.com/Midwayne/kafka-mcp.git
-cd kafka-mcp
-make build            # produces ./bin/kafka-mcp
-```
-
-**2. Configure.** Create `kafka-mcp.yaml`, or `~/.kafka-mcp/config.yaml`, or point `KAFKA_MCP_CONFIG` at a file:
+**1. Configure your Kafka connections.** Create `~/.kafka-mcp/config.yaml`, or point `KAFKA_MCP_CONFIG` at an existing YAML/JSON file:
 
 ```yaml
 clusters:
@@ -58,14 +50,41 @@ clusters:
 
 Secrets are read from files or environment variables at startup (`${file:...}`, `${ENV}`), so they never live in the config. See [Authentication](docs/authentication.md) for SASL/SCRAM, OAuth, AWS MSK IAM, Kerberos, Confluent Cloud, and PEM.
 
-**3. Verify.** The check connects to every broker of every cluster:
+**2. Install in your client.** No Go build is needed. Cursor and VS Code require Node.js 20+; the launcher downloads and verifies the matching native binary on first launch. Claude Desktop bundles include their binary and require no extra runtime.
+
+<!-- install-links:start -->
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=kafka&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyItLXllcyIsIi0tcGFja2FnZT1odHRwczovL2dpdGh1Yi5jb20vTWlkd2F5bmUva2Fma2EtbWNwL3JlbGVhc2VzL2Rvd25sb2FkL3YxLjAuMC9rYWZrYS1tY3AtMS4wLjAudGd6Iiwia2Fma2EtbWNwIl19)
+[![Install in VS Code](https://img.shields.io/badge/Install_in-VS_Code-007ACC)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522kafka%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522--yes%2522%252C%2522--package%253Dhttps%253A%252F%252Fgithub.com%252FMidwayne%252Fkafka-mcp%252Freleases%252Fdownload%252Fv1.0.0%252Fkafka-mcp-1.0.0.tgz%2522%252C%2522kafka-mcp%2522%255D%257D)
+
+**Claude Desktop:** download and open the bundle for your computer, then select your Kafka configuration file.
+
+| macOS | Windows |
+|---|---|
+| [Apple Silicon](https://github.com/Midwayne/kafka-mcp/releases/download/v1.0.0/kafka-mcp_1.0.0_darwin_arm64.mcpb) | [Intel / AMD](https://github.com/Midwayne/kafka-mcp/releases/download/v1.0.0/kafka-mcp_1.0.0_windows_amd64.mcpb) |
+| [Intel](https://github.com/Midwayne/kafka-mcp/releases/download/v1.0.0/kafka-mcp_1.0.0_darwin_amd64.mcpb) | [ARM64](https://github.com/Midwayne/kafka-mcp/releases/download/v1.0.0/kafka-mcp_1.0.0_windows_arm64.mcpb) |
+<!-- install-links:end -->
+
+**3. Verify connectivity.** Run `-check` with your downloaded binary, or through the launcher:
 
 ```sh
-./bin/kafka-mcp -config kafka-mcp.yaml -check
+npx --yes --package=https://github.com/Midwayne/kafka-mcp/releases/download/v1.0.0/kafka-mcp-1.0.0.tgz kafka-mcp -check
 # OK   orders               80 brokers reachable (6.2s)
 ```
 
 When something fails, the output includes a hint. For example, brokers whose certificates don't match their advertised addresses get pointed to `tls.verify_hostname: false`.
+
+Download standalone binaries and `SHA256SUMS` from [Releases](https://github.com/Midwayne/kafka-mcp/releases). Install buttons pin a version; use a new release's buttons or bundle to upgrade.
+
+<details>
+<summary><b>Build from source</b> (Go 1.26+)</summary>
+
+```sh
+git clone https://github.com/Midwayne/kafka-mcp.git
+cd kafka-mcp
+make build            # produces ./bin/kafka-mcp
+```
+
+</details>
 
 ## Connect your agent
 
@@ -212,6 +231,7 @@ Redaction masks output; it is not access control. Use topic filters or broker AC
 | [Filtering](docs/filtering.md) | grep, CEL cookbook, group-by, field paths, decoding |
 | [Operations](docs/operations.md) | Performance tuning, jobs and paging, exports, saved scans, security, limitations |
 | [Architecture](docs/architecture.md) | Package layout and data flow for contributors |
+| [Releases](docs/releases.md) | Versioning, installation packages, release gates, upgrades, and rollback |
 | [examples/](examples) | Ready-to-copy configs |
 
 ## Development

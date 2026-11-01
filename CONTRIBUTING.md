@@ -3,10 +3,12 @@
 ## Setup
 
 - Go 1.26 or newer.
+- Node.js 20+ for launcher tests; Python 3.11+ for release packaging and install-link checks.
 - No Docker or Kafka needed: tests use franz-go's in-memory `kfake` cluster, a throwaway PKI, and fake Schema Registry servers.
 
 ```sh
 make check    # go vet + golangci-lint + race-enabled tests + build
+npm test      # binary launcher, checksum, cache, and concurrent-install tests
 ```
 
 `make lint` builds a pinned `golangci-lint` with your local toolchain, so it always understands the Go version you use.
@@ -32,3 +34,7 @@ The linter enforces these:
 ## Commits
 
 Keep commits focused, with an imperative subject line, and explain *why* in the body when it isn't obvious.
+
+## Releases
+
+See [the release strategy](docs/releases.md) for versioning, packaging previews, and the tagged GitHub Actions publication workflow.

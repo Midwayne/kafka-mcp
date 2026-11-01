@@ -1,0 +1,18 @@
+{
+  "name": "@midwayne/kafka-mcp",
+  "version": "1.0.0",
+  "description": "Explore, search, and aggregate Kafka messages through MCP",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Midwayne/kafka-mcp.git"
+  },
+  "homepage": "https://github.com/Midwayne/kafka-mcp",
+  "bin": {
+    "kafka-mcp": "npm/bin/kafka-mcp.cjs"
+  },
+  "files": ["npm/bin", "npm/lib"],
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "test": "node --test"
+  }
+}
